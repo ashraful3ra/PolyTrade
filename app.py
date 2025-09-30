@@ -30,6 +30,56 @@ worker_stop_event = threading.Event()
 # --- Upgraded Password Protection with Hashing ---
 APP_PASSWORD_HASH = generate_password_hash(os.environ.get('APP_PASSWORD', 'tradebot'))
 
+# Helper function to stop/start the ROI worker and refresh positions (Fixes Bug 1 & 2)
+def _update_positions_and_worker(account_id, wait_time=1.0):
+    """
+    Stops the existing ROI worker, waits, starts a new worker for new symbols,
+    and requests initial positions for UI refresh.
+    """
+    global worker_thread, worker_stop_event
+    
+    # 1. Stop the current worker
+    if worker_thread and worker_thread.is_alive():
+        worker_stop_event.set()
+        worker_thread.join()
+        
+    # Wait for the external API (Binance) to update position status
+    if wait_time > 0:
+        time.sleep(wait_time)
+        
+    # 2. Restart the worker
+    worker_stop_event.clear()
+    worker_thread = threading.Thread(target=roi_websocket_worker, args=(account_id,))
+    worker_thread.daemon = True
+    worker_thread.start()
+    
+    # 3. Request initial positions for immediate UI update
+    handle_initial_positions({'account_id': account_id})
+
+# Helper function to update all active accounts' balances (Part of Bug 3 Fix)
+def _update_account_balances():
+    """Fetches and updates the balance for all active accounts."""
+    accounts = list_accounts()
+    updated_list = []
+    for acc in accounts:
+        # Only try to update active accounts
+        if acc['active'] and acc['id']:
+            try:
+                bn = safe_get_client(acc)
+                latest_balance = bn.futures_balance()
+                with connect() as con:
+                    con.cursor().execute('UPDATE accounts SET futures_balance=?, updated_at=? WHERE id=?', 
+                                         (latest_balance, now(), acc['id']))
+                    con.commit()
+                # Update the in-memory dictionary for immediate return
+                acc['futures_balance'] = latest_balance 
+            except Exception as e:
+                print(f"Error updating balance for account {acc.get('name')} ({acc['id']}): {e}")
+        updated_list.append(acc)
+        
+    return updated_list
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -116,6 +166,31 @@ def accounts_delete(acc_id):
         con.cursor().execute('DELETE FROM accounts WHERE id=?', (acc_id,))
         con.commit()
     return jsonify({'ok': True, 'accounts': list_accounts()})
+
+# NEW ROUTE (Used by account.js for toggle functionality)
+@app.route('/accounts/toggle/<int:acc_id>', methods=['POST'])
+@login_required
+def accounts_toggle(acc_id):
+    with connect() as con:
+        cur = con.cursor()
+        r = cur.execute('SELECT active FROM accounts WHERE id=?', (acc_id,)).fetchone()
+        if r:
+            new_status = 1 if r['active'] == 0 else 0
+            cur.execute('UPDATE accounts SET active=?, updated_at=? WHERE id=?', (new_status, now(), acc_id))
+            con.commit()
+            return jsonify({'ok': True, 'status': new_status})
+        return jsonify({'error': 'Account not found'}), 404
+
+# NEW ROUTE (Fixes Bug 3)
+@app.route('/accounts/update_balances', methods=['POST'])
+@login_required
+def accounts_update_balances():
+    try:
+        updated_accounts = _update_account_balances()
+        return jsonify({'ok': True, 'accounts': updated_accounts})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/symbol-info')
 def symbol_info():
@@ -218,7 +293,9 @@ def trades_submit():
                 except Exception as cleanup_e: print(f"Failed to rollback {trade['symbol']}: {cleanup_e}")
         return jsonify({'error': f"Failed to place order: {str(e)}"}), 500
     
-    socketio.emit('positions_update', {'account_id': account_id}, namespace='/trades')
+    # FIX for Bug 1 & 2: Restart the ROI worker for new symbols & refresh UI.
+    _update_positions_and_worker(account_id, wait_time=1)
+    
     return jsonify({'ok': True, 'message': f"{len(successful_trades)} trades submitted."})
 
 @app.route('/api/trades/close', methods=['POST'])
@@ -250,7 +327,9 @@ def trades_close():
             print(f"Could not close trade for {trade.get('symbol')}: {e}")
 
     time.sleep(1)
-    socketio.emit('positions_update', {'account_id': account_id}, namespace='/trades')
+    # FIX for Bug 1: Restart the ROI worker to update the list of active symbols.
+    _update_positions_and_worker(account_id, wait_time=1)
+    
     return jsonify({'ok': True, 'message': f"Attempted to close {len(trades_to_close)} trades. {closed_count} confirmed."})
 #</editor-fold>
 

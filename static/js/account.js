@@ -8,13 +8,42 @@ function renderAccounts(items){
     <button class="btn btn-danger acc-del" data-id="${acc.id}"><i class="fas fa-trash-alt"></i></button></div>`;
     root.appendChild(el);
   }
+  
+  // FIX: After toggle, refresh the balances from the server to get the latest status
   root.querySelectorAll('.acc-toggle').forEach(x=>x.addEventListener('change',async ev=>{
-    const id=ev.target.getAttribute('data-id'); await fetch(`/accounts/toggle/${id}`,{method:'POST'});
+    const id=ev.target.getAttribute('data-id'); 
+    await fetch(`/accounts/toggle/${id}`,{method:'POST'});
+    
+    // Refresh account list to reflect the latest balance/status
+    const r=await fetch('/accounts/update_balances',{method:'POST'}); 
+    const d=await r.json(); 
+    if(!d.error) renderAccounts(d.accounts);
   }));
+  
   root.querySelectorAll('.acc-del').forEach(x=>x.addEventListener('click',async ev=>{
     const id=ev.target.closest('button').getAttribute('data-id'); if(!confirm('Delete this account?'))return;
     const r=await fetch(`/accounts/delete/${id}`,{method:'POST'}); const d=await r.json(); renderAccounts(d.accounts);
   }));
+}
+
+// FIX for Bug 3: New function to refresh all balances.
+async function refreshAllBalances() {
+    const btn = document.getElementById('btn_refresh_balances');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    const r = await fetch('/accounts/update_balances', { method: 'POST' });
+    const d = await r.json().catch(() => ({ error: 'Failed to parse response' }));
+
+    if (d.error) {
+        alert('Error refreshing balances: ' + d.error);
+    } else {
+        renderAccounts(d.accounts);
+    }
+    
+    btn.disabled = false;
+    btn.textContent = originalText;
 }
 
 document.getElementById('btn_save').addEventListener('click', async () => {
@@ -67,3 +96,6 @@ document.getElementById('btn_save').addEventListener('click', async () => {
 
 // Initial rendering call from the data passed by the template
 renderAccounts(window.__ACCOUNTS__ || []);
+
+// Attach event listener for the new refresh button (Bug 3 Fix)
+document.getElementById('btn_refresh_balances')?.addEventListener('click', refreshAllBalances);

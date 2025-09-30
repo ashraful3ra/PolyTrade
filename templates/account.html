@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}{% set active_page='account' %}
 {% block content %}
 <div class="grid">
@@ -17,6 +16,9 @@
   <div class="card">
     <h2>Accounts</h2>
     <div id="account_list" class="list mt"></div>
+    <div class="row mt2" style="justify-content: flex-end;">
+      <button id="btn_refresh_balances" class="btn btn-primary btn-small">Refresh Balances</button>
+    </div>
     <div class="small mt">Toggle to include/exclude an account from bot runs.</div>
   </div>
 </div>
