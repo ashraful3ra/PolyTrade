@@ -1,0 +1,413 @@
+/* PolyTrade/static/css/style.css */
+
+:root {
+    --bg: #0e1520;
+    --card: #121a26;
+    --text: #c9d4e5;
+    --muted: #7d8aa3;
+    --cyan: #22d3ee;
+    --green: #1db954;
+    --danger: #ef4444;
+    --amber: #f59e0b;
+    --primary: #f08e25;
+}
+
+* {
+    box-sizing: border-box
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Arial
+}
+
+.navbar {
+    background: #0b1220;
+    border-bottom: 1px solid #0f1a2b;
+}
+
+.navbar-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav a {
+    color: var(--text);
+    opacity: .8;
+    text-decoration: none;
+    margin-left: 18px
+}
+
+.nav a.active {
+    opacity: 1;
+    border-bottom: 2px solid #f08d25;
+    padding-bottom: 4px
+}
+
+.container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid #0f1a2b;
+    padding: 16px;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25)
+}
+
+.input,
+select,
+.btn {
+    background: #0b1220;
+    border: 1px solid #1e2a3f;
+    color: var(--text);
+    border-radius: 10px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none
+}
+
+.row {
+    display: flex;
+    gap: 12px;
+    align-items: center
+}
+
+.mt {
+    margin-top: 12px
+}
+
+.mt2 {
+    margin-top: 20px
+}
+
+.small {
+    font-size: 12px;
+    color: var(--muted)
+}
+
+.btn {
+    cursor: pointer;
+    transition: .2s ease;
+    font-weight: 600;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+.btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #06202a
+}
+
+.btn-success {
+    background: #1db954;
+    border-color: #1db954;
+    color: #062010
+}
+
+.btn-danger {
+    background: #ef4444;
+    border-color: #ef4444
+}
+
+.btn-warning {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #351a00
+}
+
+.btn-small {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid #1e2a3f
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px
+}
+
+.list-item {
+    background: #0b1220;
+    border: 1px solid #1e2a3f;
+    padding: 10px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between
+}
+
+.list-item .name {
+    font-weight: 600
+}
+
+.list-item .sub {
+    font-size: 12px;
+    color: var(--muted)
+}
+
+.switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer
+}
+
+.switch input {
+    display: none
+}
+
+.switch .dot {
+    width: 32px;
+    height: 18px;
+    background: #0b1220;
+    border: 1px solid #24405e;
+    border-radius: 999px;
+    position: relative
+}
+
+.switch .dot::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background: #2a3b5e;
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    border-radius: 50%;
+    transition: .2s
+}
+
+.switch input:checked+.dot {
+    background: #0d3b3a;
+    border-color: #0d3b3a
+}
+
+.switch input:checked+.dot::after {
+    left: 17px;
+    background: #00d3b8
+}
+
+.kv {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 6px;
+    font-size: 13px;
+    color: #a9b7cf
+}
+
+.kv b {
+    color: #dfe7f5
+}
+
+.roi-pos {
+    color: #00e676
+}
+
+.roi-neg {
+    color: #ff5252
+}
+
+@media (max-width:900px) {
+    .grid {
+        grid-template-columns: 1fr
+    }
+}
+
+/* === Bots card details (reused) === */
+.bot-card {
+    padding: 16px;
+    border: 1px solid #2a2f3a;
+    border-radius: 12px;
+    background: #0f1420;
+    margin-bottom: 12px;
+}
+
+.bot-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.bot-title {
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.bot-meta {
+    font-size: 12px;
+    opacity: .8;
+}
+
+.bot-row-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.status-ok {
+    color: #42d392;
+}
+
+.status-warn {
+    color: #f59e0b;
+}
+
+/* --- Add these styles for the new UI --- */
+.alert-danger {
+    background-color: var(--danger);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+.collapsible {
+    background-color: #0f1420;
+    cursor: pointer;
+    width: 100%;
+    border: 1px solid #2a2f3a;
+    text-align: left;
+    outline: none;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--text);
+    padding: 10px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* This will push the arrow to the right */
+}
+
+.collapsible:after {
+    content: '▸'; /* Right-pointing triangle */
+    font-size: 1.2em; /* Increased font size */
+    color: var(--muted);
+    transition: transform 0.2s;
+}
+
+.collapsible.active:after {
+    content: '▾'; /* Down-pointing triangle */
+}
+
+.content {
+    padding: 15px 0 0 0;
+    display: none;
+    overflow: hidden;
+    background-color: transparent;
+}
+
+.input-small {
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.btn-tiny-danger {
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    line-height: 22px;
+    text-align: center;
+    padding: 0;
+}
+
+/* Running Trade Table */
+.trade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.trade-table th,
+.trade-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #1e2a3f;
+}
+
+.trade-table th {
+    font-weight: bold;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.trade-table tr:last-child td {
+    border-bottom: none;
+}
+/* Tom Select Customization */
+.ts-control {
+    background: #0b1220 !important;
+    border: 1px solid #1e2a3f !important;
+    border-radius: 10px !important;
+    padding: 10px 12px !important;
+}
+.ts-dropdown {
+    background: #0b1220 !important;
+    border: 1px solid #1e2a3f !important;
+    border-radius: 10px !important;
+}
+.ts-dropdown .option {
+    padding: 10px 12px !important;
+}
+.ts-dropdown .option:hover, .ts-dropdown .active {
+    background: var(--primary) !important;
+    color: #06202a !important;
+}
+.ts-dropdown-content::-webkit-scrollbar {
+    width: 8px;
+}
+.ts-dropdown-content::-webkit-scrollbar-track {
+    background: var(--card);
+}
+.ts-dropdown-content::-webkit-scrollbar-thumb {
+    background-color: var(--primary);
+    border-radius: 10px;
+    border: 2px solid var(--card);
+}
+
+
+/* === PREVIOUSLY ADDED STYLES === */
+#coin_settings_container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+#coin_settings_container > p {
+    grid-column: 1 / -1; /* Make placeholder span full width */
+}
+#coin_settings_container .bot-card {
+    margin-bottom: 0; /* Override default margin */
+    border-top: 3px solid var(--primary);
+}
