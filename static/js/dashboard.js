@@ -1,3 +1,5 @@
+// PolyTrade/static/js/dashboard.js
+
 (() => {
   if (window.__dashboardInitLoaded) return;
   window.__dashboardInitLoaded = true;
@@ -5,8 +7,8 @@
   let symbolsCache = [];
   let selectedCoins = new Map();
   let runningTrades = new Map();
-  let socket = null;
-  let tsInstance = null; // TomSelect instance (private)
+  let pollingInterval = null; // New polling mechanism
+  let tsInstance = null; 
 
   function el(tag, attrs = {}) {
     const e = document.createElement(tag);
@@ -93,61 +95,58 @@
     const countEl = document.getElementById('coin_count_display');
     if (countEl) countEl.textContent = selectedCoins.size;
   }
+  
+  // --- NEW POLLING LOGIC ---
+  async function fetchAndUpdateTrades(accountId) {
+    const s = document.getElementById('ws_status');
+    const container = document.getElementById('running_trades_container');
+    
+    if (s) { s.className = 'status-ok'; s.textContent = 'Live (Polling)'; } // Status indicator set to live during fetch
 
-  function connectWebSocket(accountId) {
-    if (!window.io) {
-      showError('Socket.io not loaded', '#running-trade-error');
-      return;
-    }
-    if (socket && socket.connected) {
-      socket.disconnect();
-    }
+    try {
+        const r = await fetch(`/api/trades/fetch_roi/${accountId}`);
+        const data = await r.json();
 
-    socket = io('/trades');
-
-    socket.on('connect', () => {
-      const s = document.getElementById('ws_status');
-      if (s) { s.className = 'status-ok'; s.textContent = 'Live'; }
-      socket.emit('start_roi_updates', { account_id: accountId });
-      socket.emit('request_initial_positions', { account_id: accountId });
-    });
-
-    socket.on('disconnect', () => {
-      const s = document.getElementById('ws_status');
-      if (s) { s.className = 'status-warn'; s.textContent = 'Offline'; }
-    });
-
-    socket.on('positions_update', (data) => {
-      runningTrades.clear();
-      if (data && data.trades) {
-        data.trades.forEach((trade) => {
-          trade.roi = 0;
-          runningTrades.set(trade.symbol, trade);
-        });
-      }
-      renderRunningTrades();
-    });
-
-    socket.on('roi_update', (data) => {
-      if (!data) return;
-      if (runningTrades.has(data.symbol)) {
-        const trade = runningTrades.get(data.symbol);
-        const entry = trade.entry_price;
-        const mark = data.mark_price;
-        let roi = 0;
-        if (entry > 0) {
-          roi = ((mark - entry) / entry) * trade.leverage * 100;
-          if (trade.side === 'SHORT') roi *= -1;
+        if (r.ok && data.ok) {
+            runningTrades.clear();
+            if (data.trades) {
+                data.trades.forEach((trade) => {
+                    // Trades now include ROI and mark_price directly from the backend
+                    runningTrades.set(trade.symbol, trade);
+                });
+            }
+            renderRunningTrades();
+        } else {
+            showError(data.error || 'Failed to fetch trades via API.', '#running-trade-error');
+            if (container) {
+                container.innerHTML = '<p class="small" style="text-align: center; color: var(--danger);">API Polling Failed. Select Account.</p>';
+            }
         }
-        trade.roi = roi;
-        updateTradeRow(trade);
-      }
-    });
-
-    socket.on('worker_error', (data) => {
-      showError((data && data.message) || 'Worker error', '#running-trade-error');
-    });
+    } catch (e) {
+        showError('Network Error during API Polling: ' + e.message, '#running-trade-error');
+        if (s) { s.className = 'status-warn'; s.textContent = 'Offline'; }
+    }
   }
+
+  function startPolling(accountId) {
+    stopPolling();
+    // Fetch once immediately
+    fetchAndUpdateTrades(accountId);
+    // Start polling every 1 second (1000ms) - for faster updates
+    pollingInterval = setInterval(() => fetchAndUpdateTrades(accountId), 1000); 
+  }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+    const s = document.getElementById('ws_status');
+    if (s) { s.className = 'status-off'; s.textContent = 'Stopped'; }
+    runningTrades.clear();
+    renderRunningTrades();
+  }
+
 
   function getTradeRowHTML(trade) {
     const roiClass = trade.roi >= 0 ? 'roi-pos' : 'roi-neg';
@@ -226,15 +225,21 @@
     });
     const res = await r.json().catch(() => ({}));
     alert(res.message || 'Request sent.');
+    // Trigger an immediate fetch after action
+    fetchAndUpdateTrades(account_id);
   }
 
   function closeSelectedTrades() {
+    const accountId = document.getElementById('bot_account')?.value;
+    if (!accountId) return;
     const trades = Array.from(document.querySelectorAll('.trade-checkbox:checked'))
       .map((cb) => ({ symbol: cb.dataset.symbol, side: cb.dataset.side }));
     if (trades.length > 0 && confirm(`Close ${trades.length} selected trades?`)) closeTrades(trades);
   }
 
   function closeAllTrades() {
+    const accountId = document.getElementById('bot_account')?.value;
+    if (!accountId) return;
     const trades = Array.from(document.querySelectorAll('.trade-checkbox'))
       .map((cb) => ({ symbol: cb.dataset.symbol, side: cb.dataset.side }));
     if (trades.length > 0 && confirm(`Close all ${trades.length} listed trades?`)) closeTrades(trades);
@@ -254,12 +259,19 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, settings }),
-    }).catch(() => {});
+    }).catch(e => {
+        console.error("Error saving template:", e);
+        showError("Failed to save template.");
+    });
     loadTemplates();
   }
 
   async function loadTemplates() {
-    const r = await fetch('/api/templates/list').catch(() => null);
+    const r = await fetch('/api/templates/list').catch(e => {
+        console.error("Error loading templates:", e);
+        showError("Failed to load templates.");
+        return null;
+    });
     const data = r ? await r.json().catch(() => ({})) : {};
     const container = document.getElementById('tpl_list');
     if (!container) return;
@@ -288,11 +300,18 @@
 
     if (action === 'delete') {
       if (confirm('Delete this template?')) {
-        await fetch(`/api/templates/delete/${id}`, { method: 'POST' }).catch(() => {});
+        await fetch(`/api/templates/delete/${id}`, { method: 'POST' }).catch(e => {
+            console.error("Error deleting template:", e);
+            showError("Failed to delete template.");
+        });
         loadTemplates();
       }
     } else if (action === 'edit') {
-      const r = await fetch(`/api/templates/get/${id}`).catch(() => null);
+      const r = await fetch(`/api/templates/get/${id}`).catch(e => {
+        console.error("Error fetching template:", e);
+        showError("Failed to load template settings.");
+        return null;
+      });
       if (!r) return;
       const settings = await r.json().catch(() => null);
       if (!settings) return;
@@ -365,6 +384,9 @@
             selectedCoins.clear();
             if(tsInstance) tsInstance.clear();
             renderCoinSettings();
+            // Trigger an immediate fetch after success
+            fetchAndUpdateTrades(payload.account_id);
+
         } else {
             showError(res.error || 'An unknown error occurred.');
         }
@@ -431,11 +453,9 @@
     document.getElementById('bot_account')?.addEventListener('change', (e) => {
       const accountId = e.target.value;
       if (accountId) {
-        connectWebSocket(accountId);
-      } else if (socket) {
-        socket.disconnect();
-        runningTrades.clear();
-        renderRunningTrades();
+        startPolling(accountId);
+      } else {
+        stopPolling();
       }
     });
 
