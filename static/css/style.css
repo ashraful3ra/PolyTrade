@@ -380,10 +380,14 @@ select,
 }
 .ts-dropdown .option {
     padding: 10px 12px !important;
+    /* Ensure regular options are the default text color */
+    color: var(--text) !important; 
 }
 .ts-dropdown .option:hover, .ts-dropdown .active {
+    /* Highlighted options are orange */
     background: var(--primary) !important;
-    color: #06202a !important;
+    /* Text color for orange background should be dark for contrast */
+    color: #06202a !important; 
 }
 .ts-dropdown-content::-webkit-scrollbar {
     width: 8px;
@@ -410,4 +414,35 @@ select,
 #coin_settings_container .bot-card {
     margin-bottom: 0; /* Override default margin */
     border-top: 3px solid var(--primary);
+}
+
+/* --- Default (PC/Desktop) Styling --- */
+/* Your existing inline styles are assumed to be the default for PC.
+   The CSS below ensures the badge starts with the mobile-specific
+   positioning (right: 10px; top: 7px;) for larger screens or the default
+   if you move the inline styles to the stylesheet.
+
+   Assuming you want to keep the PC style as is:
+   right: 10px;
+   top: 7px;
+*/
+#roi_match_count {
+  position: absolute;
+  /* These are the styles from your original HTML that will be used on PC */
+  right: -34px;
+  top: 4px;
+  background: var(--primary);
+  color: #000;
+  /* Add other necessary styles like padding, font-size, etc. */
+}
+
+
+/* --- Mobile (Small Screens) Styling --- */
+/* This media query targets screens up to 768px wide (standard mobile breakpoint) */
+@media (max-width: 768px) {
+    #roi_match_count {
+        /* Apply the specific positioning for mobile */
+        right: 24px !important;
+        top: 4px !important;
+    }
 }

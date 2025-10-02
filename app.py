@@ -74,7 +74,8 @@ def _update_account_balances():
                 bn = safe_get_client(acc)
                 latest_balance = bn.futures_balance()
                 with connect() as con:
-                    con.cursor().execute('UPDATE accounts SET futures_balance=?, updated_at=? WHERE id=?', 
+                    # UPDATED: Use %s placeholder for MySQL compatibility
+                    con.cursor().execute('UPDATE accounts SET futures_balance=%s, updated_at=%s WHERE id=%s', 
                                          (latest_balance, now(), acc['id']))
                     con.commit()
                 acc['futures_balance'] = latest_balance 
@@ -113,7 +114,10 @@ def logout():
 #<editor-fold desc="Helper Functions">
 def get_account(acc_id):
     with connect() as con:
-        return to_dict(con.cursor().execute('SELECT * FROM accounts WHERE id=?', (acc_id,)).fetchone())
+        # FIX for MySQL fetchall error: Separate cursor execution and fetchone
+        cur = con.cursor()
+        cur.execute('SELECT * FROM accounts WHERE id=%s', (acc_id,))
+        return to_dict(cur.fetchone())
 
 def safe_get_client(acc):
     try:
@@ -125,7 +129,10 @@ def safe_get_client(acc):
 
 def list_accounts():
     with connect() as con:
-        return [to_dict(r) for r in con.cursor().execute('SELECT * FROM accounts ORDER BY id DESC').fetchall()]
+        # FIX for MySQL fetchall error: Separate cursor execution and fetchall
+        cur = con.cursor()
+        cur.execute('SELECT * FROM accounts ORDER BY id DESC')
+        return [to_dict(r) for r in cur.fetchall()]
 #</editor-fold>
 
 #<editor-fold desc="UI Routes">
@@ -146,6 +153,7 @@ def dashboard():
 
 #<editor-fold desc="API Routes">
 @app.route('/accounts/add', methods=['POST'])
+@login_required
 def accounts_add():
     data = request.get_json(force=True)
     name, api_key, api_secret = data.get('name','').strip(), data.get('api_key','').strip(), data.get('api_secret','').strip()
@@ -159,15 +167,18 @@ def accounts_add():
         return jsonify({'error': str(e)}), 400
     with connect() as con:
         cur = con.cursor()
-        cur.execute('INSERT INTO accounts (name,exchange,api_key_enc,api_secret_enc,testnet,active,futures_balance,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        # UPDATED: Use %s placeholder for MySQL compatibility
+        cur.execute('INSERT INTO accounts (name,exchange,api_key_enc,api_secret_enc,testnet,active,futures_balance,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
             (name, 'BINANCE_UM', enc_str(api_key), enc_str(api_secret), testnet, 1, balance, now(), now()))
         con.commit()
     return jsonify({'ok': True, 'accounts': list_accounts()})
 
 @app.route('/accounts/delete/<int:acc_id>', methods=['POST'])
+@login_required
 def accounts_delete(acc_id):
     with connect() as con:
-        con.cursor().execute('DELETE FROM accounts WHERE id=?', (acc_id,))
+        # UPDATED: Use %s placeholder for MySQL compatibility
+        con.cursor().execute('DELETE FROM accounts WHERE id=%s', (acc_id,))
         con.commit()
     return jsonify({'ok': True, 'accounts': list_accounts()})
 
@@ -176,10 +187,13 @@ def accounts_delete(acc_id):
 def accounts_toggle(acc_id):
     with connect() as con:
         cur = con.cursor()
-        r = cur.execute('SELECT active FROM accounts WHERE id=?', (acc_id,)).fetchone()
+        # UPDATED: Use %s placeholder for MySQL compatibility (SELECT)
+        cur.execute('SELECT active FROM accounts WHERE id=%s', (acc_id,))
+        r = cur.fetchone()
         if r:
             new_status = 1 if r['active'] == 0 else 0
-            cur.execute('UPDATE accounts SET active=?, updated_at=? WHERE id=?', (new_status, now(), acc_id))
+            # UPDATED: Use %s placeholder for MySQL compatibility (UPDATE)
+            cur.execute('UPDATE accounts SET active=%s, updated_at=%s WHERE id=%s', (new_status, now(), acc_id))
             con.commit()
             return jsonify({'ok': True, 'status': new_status})
         return jsonify({'error': 'Account not found'}), 404
@@ -195,6 +209,7 @@ def accounts_update_balances():
 
 
 @app.route('/api/symbol-info')
+@login_required
 def symbol_info():
     symbol = (request.args.get('symbol') or '').upper().strip()
     if not symbol: return jsonify({'error': 'symbol required'}), 400
@@ -205,6 +220,7 @@ def symbol_info():
     except Exception as e: return jsonify({'error': str(e)}), 500
 
 @app.route('/api/futures/symbols')
+@login_required
 def futures_symbols():
     try:
         bn = BinanceUM('', '', False)
@@ -214,6 +230,7 @@ def futures_symbols():
     except Exception as e: return jsonify({'symbols': [], 'error': str(e)}), 500
 
 @app.route('/api/price')
+@login_required
 def get_price():
     symbol = (request.args.get('symbol') or '').upper().strip()
     if not symbol: return jsonify({'error': 'symbol required'}), 400
@@ -224,32 +241,43 @@ def get_price():
 
 # Template APIs
 @app.route('/api/templates/save', methods=['POST'])
+@login_required
 def tpl_save():
     data = request.get_json(force=True)
     name, settings = data.get('name', '').strip(), data.get('settings', {})
     if not name or not settings: return jsonify({'error': 'Template name and settings are required'}), 400
     with connect() as con:
-        con.cursor().execute('INSERT INTO templates (name, settings_json, created_at) VALUES (?,?,?)', (name, json.dumps(settings), now()))
+        # UPDATED: Use %s placeholder for MySQL compatibility
+        con.cursor().execute('INSERT INTO templates (name, settings_json, created_at) VALUES (%s,%s,%s)', (name, json.dumps(settings), now()))
         con.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/templates/list')
+@login_required
 def tpl_list():
     with connect() as con:
-        templates = [to_dict(r) for r in con.cursor().execute('SELECT id, name, created_at FROM templates ORDER BY created_at DESC').fetchall()]
+        cur = con.cursor()
+        cur.execute('SELECT id, name, created_at FROM templates ORDER BY created_at DESC')
+        templates = [to_dict(r) for r in cur.fetchall()]
     return jsonify({'items': templates})
 
 @app.route('/api/templates/get/<int:tpl_id>')
+@login_required
 def tpl_get(tpl_id):
     with connect() as con:
-        r = con.cursor().execute('SELECT settings_json FROM templates WHERE id=?', (tpl_id,)).fetchone()
+        cur = con.cursor()
+        # UPDATED: Use %s placeholder for MySQL compatibility
+        cur.execute('SELECT settings_json FROM templates WHERE id=%s', (tpl_id,))
+        r = cur.fetchone()
     if not r: return jsonify({'error': 'Template not found'}), 404
     return jsonify(json.loads(r['settings_json']))
 
 @app.route('/api/templates/delete/<int:tpl_id>', methods=['POST'])
+@login_required
 def tpl_delete(tpl_id):
     with connect() as con:
-        con.cursor().execute('DELETE FROM templates WHERE id=?', (tpl_id,))
+        # UPDATED: Use %s placeholder for MySQL compatibility
+        con.cursor().execute('DELETE FROM templates WHERE id=%s', (tpl_id,))
         con.commit()
     return jsonify({'ok': True})
 

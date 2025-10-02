@@ -147,12 +147,17 @@
     renderRunningTrades();
   }
 
-
-  function getTradeRowHTML(trade) {
+  // MODIFIED: Accepts the map of previously checked trades to maintain state
+  function getTradeRowHTML(trade, checkedTrades) {
     const roiClass = trade.roi >= 0 ? 'roi-pos' : 'roi-neg';
+    
+    // Check if this trade was previously checked using a composite key
+    const isChecked = checkedTrades.has(`${trade.symbol}-${trade.side}`);
+    const checkedAttr = isChecked ? 'checked' : ''; // Preserve checked state
+
     return `
       <tr id="trade-row-${trade.symbol}">
-        <td><input type="checkbox" class="trade-checkbox" data-symbol="${trade.symbol}" data-side="${trade.side}"></td>
+        <td><input type="checkbox" class="trade-checkbox" data-symbol="${trade.symbol}" data-side="${trade.side}" ${checkedAttr}></td>
         <td><b>${trade.symbol}</b></td>
         <td>${trade.entry_price.toFixed(4)}</td>
         <td><b class="${roiClass}" id="roi-${trade.symbol}">${trade.roi.toFixed(2)}%</b></td>
@@ -164,6 +169,14 @@
   function renderRunningTrades() {
     const container = document.getElementById('running_trades_container');
     if (!container) return;
+    
+    // FIX: 1. Store the state of all checked trades before re-render
+    const checkedTrades = new Map();
+    container.querySelectorAll('.trade-checkbox:checked').forEach(cb => {
+        checkedTrades.set(`${cb.dataset.symbol}-${cb.dataset.side}`, true);
+    });
+    const selectAllChecked = document.getElementById('select_all_trades')?.checked || false;
+    
 
     const roiFilterEl = document.getElementById('roi_search_input');
     const roiFilter = roiFilterEl ? parseFloat(roiFilterEl.value) : null;
@@ -183,12 +196,13 @@
         <table class="trade-table">
           <thead>
             <tr>
-              <th><input type="checkbox" id="select_all_trades"></th>
+              <th><input type="checkbox" id="select_all_trades" ${selectAllChecked ? 'checked' : ''}></th>
               <th>Coin</th><th>Entry Price</th><th>ROI%</th><th>Side</th><th>Action</th>
             </tr>
           </thead>
-          <tbody>${tradesToRender.map(getTradeRowHTML).join('')}</tbody>
+          <tbody>${tradesToRender.map(trade => getTradeRowHTML(trade, checkedTrades)).join('')}</tbody>
         </table>`;
+        
       const selectAll = document.getElementById('select_all_trades');
       if (selectAll) {
         selectAll.addEventListener('change', (e) => {
