@@ -1,18 +1,17 @@
 # PolyTrade/utils/db.py - FINAL CORRECTED VERSION
 
 import pymysql.cursors
-import os 
+import os
 import time
-from decimal import Decimal # <-- Eita dorkar Decimal type check korar jonne
+from decimal import Decimal
 
 # Use environment variables for connection details
 HOST = os.environ.get('DB_HOST', 'utradebot.com')
 USER = os.environ.get('DB_USER', 'polytradebot')
 PASSWORD = os.environ.get('DB_PASSWORD', 'V3E~9mk=4VKZ')
 DATABASE = os.environ.get('DB_NAME', 'polytradebot')
-# NEW: DB_PORT environment variable theke load kora holo, default 3306
-PORT = int(os.environ.get('DB_PORT', 3306)) 
-SCHEMA_VERSION = 6
+PORT = int(os.environ.get('DB_PORT', 3306))
+SCHEMA_VERSION = 7 # Incremented version for user_id addition
 
 def now(): return int(time.time())
 
@@ -37,7 +36,7 @@ def to_dict(row):
     new_dict = {}
     for key, value in dict(row).items():
         if isinstance(value, Decimal):
-            new_dict[key] = float(value) # Decimal ke float e convert kora holo
+            new_dict[key] = float(value)
         else:
             new_dict[key] = value
     return new_dict
@@ -45,23 +44,31 @@ def to_dict(row):
 def init_db():
     con = connect(dict_cursor=False)
     cur = con.cursor()
-    
-    # 1. Ensure the schema_version table exists (MySQL compatible syntax)
+
     cur.execute("""CREATE TABLE IF NOT EXISTS schema_version (
         version INT NOT NULL PRIMARY KEY
     ) ENGINE=InnoDB;""")
     con.commit()
 
-    # 2. Check current version
     cur.execute("SELECT version FROM schema_version;")
     r = cur.fetchone()
     current_version = r[0] if r and r[0] is not None else 0
 
-    if current_version < 6:
-        print("Migrating schema to version 6...")
-        # --- BOT TABLE SIMPLIFICATION (TEXT/DEFAULT fix shoho) ---
-        cur.execute("DROP TABLE IF EXISTS bots;")
-        cur.execute("""CREATE TABLE bots (
+    if current_version < SCHEMA_VERSION:
+        print(f"Migrating schema from version {current_version} to {SCHEMA_VERSION}...")
+        
+        # Add user_id column to all tables if they exist
+        try: cur.execute("ALTER TABLE accounts ADD COLUMN user_id VARCHAR(255) NOT NULL;")
+        except: pass
+        try: cur.execute("ALTER TABLE bots ADD COLUMN user_id VARCHAR(255) NOT NULL;")
+        except: pass
+        try: cur.execute("ALTER TABLE trades ADD COLUMN user_id VARCHAR(255) NOT NULL;")
+        except: pass
+        try: cur.execute("ALTER TABLE templates ADD COLUMN user_id VARCHAR(255) NOT NULL;")
+        except: pass
+
+        # Recreate tables with user_id for a fresh install
+        cur.execute("""CREATE TABLE IF NOT EXISTS bots (
             id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
             name TEXT NOT NULL,
             account_id INT NOT NULL,
@@ -72,12 +79,11 @@ def init_db():
             margin_type TEXT NOT NULL,
             status VARCHAR(50) DEFAULT 'Running',
             created_at INT,
-            closed_at INT
+            closed_at INT,
+            user_id VARCHAR(255) NOT NULL
         ) ENGINE=InnoDB;""")
 
-        # --- INDIVIDUAL TRADES TABLE (TEXT/DEFAULT fix shoho) ---
-        cur.execute("DROP TABLE IF EXISTS trades;")
-        cur.execute("""CREATE TABLE trades (
+        cur.execute("""CREATE TABLE IF NOT EXISTS trades (
             id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
             bot_id INT NOT NULL,
             symbol TEXT NOT NULL,
@@ -89,21 +95,19 @@ def init_db():
             status VARCHAR(50) DEFAULT 'Running',
             roi DECIMAL(18, 8) DEFAULT 0.0,
             pnl DECIMAL(18, 8) DEFAULT 0.0,
+            user_id VARCHAR(255) NOT NULL,
             FOREIGN KEY (bot_id) REFERENCES bots (id)
         ) ENGINE=InnoDB;""")
 
-        # --- TEMPLATE TABLE (JSON type support) ---
-        cur.execute("DROP TABLE IF EXISTS templates;")
-        cur.execute("""CREATE TABLE templates (
+        cur.execute("""CREATE TABLE IF NOT EXISTS templates (
             id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
             name TEXT NOT NULL,
             settings_json JSON NOT NULL,
-            created_at INT
+            created_at INT,
+            user_id VARCHAR(255) NOT NULL
         ) ENGINE=InnoDB;""")
 
-        # --- ACCOUNTS TABLE ---
-        cur.execute("DROP TABLE IF EXISTS accounts;")
-        cur.execute("""CREATE TABLE accounts (
+        cur.execute("""CREATE TABLE IF NOT EXISTS accounts (
             id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
             name TEXT NOT NULL,
             exchange TEXT NOT NULL,
@@ -113,15 +117,15 @@ def init_db():
             active TINYINT DEFAULT 1,
             futures_balance DECIMAL(18, 8),
             created_at INT,
-            updated_at INT
+            updated_at INT,
+            user_id VARCHAR(255) NOT NULL
         ) ENGINE=InnoDB;""")
 
-    # 5. Update schema version
-    if current_version == 0:
-        cur.execute("INSERT INTO schema_version (version) VALUES (%s);", (SCHEMA_VERSION,))
-    else:
-        cur.execute("UPDATE schema_version SET version=%s;", (SCHEMA_VERSION,))
+        if current_version == 0:
+            cur.execute("INSERT INTO schema_version (version) VALUES (%s);", (SCHEMA_VERSION,))
+        else:
+            cur.execute("UPDATE schema_version SET version=%s;", (SCHEMA_VERSION,))
 
-    con.commit()
-    con.close()
-    print(f'DB init OK. Schema version is now {SCHEMA_VERSION} (MySQL).')
+        con.commit()
+        con.close()
+        print(f'DB init OK. Schema version is now {SCHEMA_VERSION} (MySQL).')
